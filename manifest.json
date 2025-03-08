@@ -1,11 +1,11 @@
 {
-	"id": "sample-plugin",
-	"name": "Sample Plugin",
-	"version": "1.0.0",
+	"id": "simple-archiver",
+	"name": "Simple Archiver",
+	"version": "0.0.1",
 	"minAppVersion": "0.15.0",
-	"description": "Demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"description": "Send old, stinky notes to the archive, where they belong.",
+	"author": "Mike Farr",
+	"authorUrl": "https://github.com/mfarr",
+	"fundingUrl": "https://github.com/mfarr/obsidian-archive",
 	"isDesktopOnly": false
 }
