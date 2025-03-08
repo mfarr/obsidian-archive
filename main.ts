@@ -7,9 +7,8 @@ import {
 	Plugin,
 	PluginSettingTab,
 	Setting,
+	TAbstractFile,
 } from "obsidian";
-
-// Remember to rename these classes and interfaces!
 
 interface SimpleArchiverSettings {
 	archiveFolder: string;
@@ -37,10 +36,6 @@ export default class SimpleArchiver extends Plugin {
 		// Perform additional things with the ribbon
 		ribbonIconEl.addClass("my-plugin-ribbon-class");
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText("Status Bar Text");
-
 		// This adds a simple command that can be triggered anywhere
 		this.addCommand({
 			id: "open-sample-modal-simple",
@@ -49,15 +44,17 @@ export default class SimpleArchiver extends Plugin {
 				new SimpleArchiverModal(this.app).open();
 			},
 		});
-		// This adds an editor command that can perform some operation on the current editor instance
+
 		this.addCommand({
-			id: "sample-editor-command",
-			name: "Sample editor command",
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection("Sample Editor Command");
+			id: "move-to-archive",
+			name: "Move to Archive",
+			editorCallback: async (editor: Editor, view: MarkdownView) => {
+				if (view.file != null) {
+					await this.moveToArchive(view.file);
+				}
 			},
 		});
+
 		// This adds a complex command that can check whether the current state of the app allows execution of the command
 		this.addCommand({
 			id: "open-sample-modal-complex",
@@ -79,7 +76,6 @@ export default class SimpleArchiver extends Plugin {
 			},
 		});
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new SimpleArchiverSettingsTab(this.app, this));
 
 		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
@@ -92,9 +88,36 @@ export default class SimpleArchiver extends Plugin {
 		this.registerInterval(
 			window.setInterval(() => console.log("setInterval"), 5 * 60 * 1000)
 		);
+
+		this.registerEvent(
+			this.app.workspace.on("file-menu", (menu, file) => {
+				menu.addItem((item) => {
+					item.setTitle("Archive")
+						.setIcon("archive")
+						.onClick(async () => {
+							await this.moveToArchive(file);
+						});
+				});
+			})
+		);
 	}
 
 	onunload() {}
+
+	async moveToArchive(file: TAbstractFile) {
+		new Notice(
+			`Archiving file ${file.path} to ${this.settings.archiveFolder}/${file.path}`
+		);
+
+		console.log(file);
+
+		this.app.fileManager.renameFile(
+			file,
+			`${this.settings.archiveFolder}/${file.path}`
+		);
+
+		new Notice(`${file.name} archived`);
+	}
 
 	async loadSettings() {
 		this.settings = Object.assign(
