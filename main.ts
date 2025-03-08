@@ -55,9 +55,17 @@ export default class SimpleArchiver extends Plugin {
 			`Archiving file ${file.path} to ${this.settings.archiveFolder}/${file.path}`
 		);
 
-		console.log(file);
+		let destinationPath = `${this.settings.archiveFolder}/${file.parent?.path}`;
 
-		this.app.fileManager.renameFile(
+		let destinationFolder = this.app.vault.getFolderByPath(
+			`${this.settings.archiveFolder}/${file.parent?.path}`
+		);
+
+		if (destinationFolder == null) {
+			await this.app.vault.createFolder(destinationPath);
+		}
+
+		await this.app.fileManager.renameFile(
 			file,
 			`${this.settings.archiveFolder}/${file.path}`
 		);
