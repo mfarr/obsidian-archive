@@ -38,7 +38,7 @@ export default class SimpleArchiver extends Plugin {
 
 				if (canBeArchived && view.file != null) {
 					if (!checking) {
-						this.moveToArchive(view.file).then();
+						this.moveToArchive(view.file);
 					}
 
 					return true;
@@ -88,11 +88,12 @@ export default class SimpleArchiver extends Plugin {
 			await this.app.vault.createFolder(destinationPath);
 		}
 
-		await this.app.fileManager
-			.renameFile(file, `${this.settings.archiveFolder}/${file.path}`)
-			.then(() => {
-				new Notice(`${file.name} archived`);
-			});
+		await this.app.fileManager.renameFile(
+			file,
+			`${this.settings.archiveFolder}/${file.path}`
+		);
+
+		new Notice(`${file.name} archived`);
 	}
 
 	async loadSettings() {
