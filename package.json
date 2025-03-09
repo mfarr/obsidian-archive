@@ -1,5 +1,5 @@
 {
-	"name": "obsidian-simple-archiver",
+	"name": "simple-archiver",
 	"version": "0.0.1",
 	"description": "Send old, stinky notes to the archive, where they belong.",
 	"main": "main.js",

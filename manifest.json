@@ -1,7 +1,7 @@
 {
-	"id": "obsidian-simple-archiver",
+	"id": "simple-archiver",
 	"name": "Simple Archiver",
-	"version": "0.0.1",
+	"version": "0.1.0",
 	"minAppVersion": "0.15.0",
 	"description": "Move old, stinky notes and folders to an archive, where they belong.",
 	"author": "Mike Farr",
