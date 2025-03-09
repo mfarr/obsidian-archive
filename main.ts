@@ -7,6 +7,8 @@ import {
 	PluginSettingTab,
 	Setting,
 	TAbstractFile,
+	TFile,
+	TFolder,
 } from "obsidian";
 
 interface SimpleArchiverSettings {
@@ -66,29 +68,40 @@ export default class SimpleArchiver extends Plugin {
 		);
 	}
 
-	onunload() {}
-
 	async moveToArchive(file: TAbstractFile) {
-		new Notice(
-			`Archiving file ${file.path} to ${this.settings.archiveFolder}/${file.path}`
-		);
+		let existingItem;
+
+		if (file instanceof TFolder) {
+			existingItem = this.app.vault.getFolderByPath(
+				`${this.settings.archiveFolder}/${file.path}`
+			);
+		} else if (file instanceof TFile) {
+			existingItem = this.app.vault.getFileByPath(
+				`${this.settings.archiveFolder}/${file.path}`
+			);
+		}
+
+		if (existingItem != null) {
+			new Notice(
+				`Unable to archive ${file.name}, item already exists in archive`
+			);
+
+			return;
+		}
 
 		let destinationPath = `${this.settings.archiveFolder}/${file.parent?.path}`;
 
-		let destinationFolder = this.app.vault.getFolderByPath(
-			`${this.settings.archiveFolder}/${file.parent?.path}`
-		);
+		let destinationFolder = this.app.vault.getFolderByPath(destinationPath);
 
 		if (destinationFolder == null) {
 			await this.app.vault.createFolder(destinationPath);
 		}
 
-		await this.app.fileManager.renameFile(
-			file,
-			`${this.settings.archiveFolder}/${file.path}`
-		);
-
-		new Notice(`${file.name} archived`);
+		await this.app.fileManager
+			.renameFile(file, `${this.settings.archiveFolder}/${file.path}`)
+			.then(() => {
+				new Notice(`${file.name} archived`);
+			});
 	}
 
 	async loadSettings() {
@@ -124,7 +137,7 @@ class SimpleArchiverSettingsTab extends PluginSettingTab {
 			)
 			.addText((text) =>
 				text
-					.setPlaceholder("Folder")
+					.setPlaceholder("Archive folder")
 					.setValue(this.plugin.settings.archiveFolder)
 					.onChange(async (value) => {
 						this.plugin.settings.archiveFolder = value;
