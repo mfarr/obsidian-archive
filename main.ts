@@ -25,11 +25,25 @@ export default class SimpleArchiver extends Plugin {
 
 		this.addCommand({
 			id: "move-to-archive",
-			name: "Move to Archive",
-			editorCallback: async (editor: Editor, view: MarkdownView) => {
-				if (view.file != null) {
-					await this.moveToArchive(view.file);
+			name: "Move to archive",
+			editorCheckCallback: (
+				checking: boolean,
+				editor: Editor,
+				view: MarkdownView
+			) => {
+				let canBeArchived = !view.file?.path.startsWith(
+					this.settings.archiveFolder
+				);
+
+				if (canBeArchived && view.file != null) {
+					if (!checking) {
+						this.moveToArchive(view.file).then();
+					}
+
+					return true;
 				}
+
+				return false;
 			},
 		});
 
@@ -37,8 +51,12 @@ export default class SimpleArchiver extends Plugin {
 
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, file) => {
+				if (file.path.startsWith(this.settings.archiveFolder)) {
+					return;
+				}
+
 				menu.addItem((item) => {
-					item.setTitle("Archive")
+					item.setTitle("Move to archive")
 						.setIcon("archive")
 						.onClick(async () => {
 							await this.moveToArchive(file);
