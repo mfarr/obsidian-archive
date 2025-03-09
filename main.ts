@@ -2,6 +2,7 @@ import {
 	App,
 	Editor,
 	MarkdownView,
+	normalizePath,
 	Notice,
 	Plugin,
 	PluginSettingTab,
@@ -128,7 +129,7 @@ class SimpleArchiverSettingsTab extends PluginSettingTab {
 			.addText((text) =>
 				text
 					.setPlaceholder("Archive folder")
-					.setValue(this.plugin.settings.archiveFolder)
+					.setValue(normalizePath(this.plugin.settings.archiveFolder))
 					.onChange(async (value) => {
 						this.plugin.settings.archiveFolder = value;
 						await this.plugin.saveSettings();
