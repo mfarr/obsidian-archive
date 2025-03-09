@@ -7,8 +7,6 @@ import {
 	PluginSettingTab,
 	Setting,
 	TAbstractFile,
-	TFile,
-	TFolder,
 } from "obsidian";
 
 interface SimpleArchiverSettings {
@@ -69,17 +67,9 @@ export default class SimpleArchiver extends Plugin {
 	}
 
 	async moveToArchive(file: TAbstractFile) {
-		let existingItem;
-
-		if (file instanceof TFolder) {
-			existingItem = this.app.vault.getFolderByPath(
-				`${this.settings.archiveFolder}/${file.path}`
-			);
-		} else if (file instanceof TFile) {
-			existingItem = this.app.vault.getFileByPath(
-				`${this.settings.archiveFolder}/${file.path}`
-			);
-		}
+		let existingItem = this.app.vault.getAbstractFileByPath(
+			`${this.settings.archiveFolder}/${file.path}`
+		);
 
 		if (existingItem != null) {
 			new Notice(
