@@ -123,7 +123,7 @@ class SimpleArchiverSettingsTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName("Archive Folder")
+			.setName("Archive folder")
 			.setDesc(
 				"The folder to use as the Archive. If the folder doesn't exist, it will be created when archiving a note."
 			)
