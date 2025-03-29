@@ -1,11 +1,14 @@
 # Simple Archiver for Obsidian
 
-Simple Archiver moves a single file or an entire folder to an archive folder that you specify in the plugin's settings. The item is moved to the same relative path in the archive. If the base archive folder doesn't exist when you archive a file, it will be created automatically.
+> _Move old, stinky notes and folders to an archive, where they belong!_
+
+Simple Archiver moves files or an entire folder to an archive folder that you specify in the plugin's settings. The items are moved to the same relative path in the archive. If the base archive folder doesn't exist when you send something to the archive, it will be created automatically.
 
 Archiving can be done via:
 
 -   `Simple Archive: Move to archive` command
 -   `Move to archive` file menu item
+-   `Move all to archive` multi-file menu item
 
 ## Known Issues & Limitations
 
