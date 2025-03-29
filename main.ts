@@ -32,7 +32,7 @@ export default class SimpleArchiver extends Plugin {
 				editor: Editor,
 				view: MarkdownView
 			) => {
-				let canBeArchived = !view.file?.path.startsWith(
+				const canBeArchived = !view.file?.path.startsWith(
 					this.settings.archiveFolder
 				);
 
@@ -60,15 +60,33 @@ export default class SimpleArchiver extends Plugin {
 					item.setTitle("Move to archive")
 						.setIcon("archive")
 						.onClick(async () => {
-							await this.moveToArchive(file);
+							if (await this.moveToArchive(file)) {
+								new Notice(`${file.name} archived`);
+							}
+						});
+				});
+			})
+		);
+
+		this.registerEvent(
+			this.app.workspace.on("files-menu", (menu, files) => {
+				menu.addItem((item) => {
+					item.setTitle("Move all to archive")
+						.setIcon("archive")
+						.onClick(async () => {
+							await this.moveAllToArchive(files);
 						});
 				});
 			})
 		);
 	}
 
-	async moveToArchive(file: TAbstractFile) {
-		let existingItem = this.app.vault.getAbstractFileByPath(
+	async moveToArchive(file: TAbstractFile): Promise<boolean> {
+		if (file.path.startsWith(this.settings.archiveFolder)) {
+			return false;
+		}
+
+		const existingItem = this.app.vault.getAbstractFileByPath(
 			`${this.settings.archiveFolder}/${file.path}`
 		);
 
@@ -77,12 +95,13 @@ export default class SimpleArchiver extends Plugin {
 				`Unable to archive ${file.name}, item already exists in archive`
 			);
 
-			return;
+			return false;
 		}
 
-		let destinationPath = `${this.settings.archiveFolder}/${file.parent?.path}`;
+		const destinationPath = `${this.settings.archiveFolder}/${file.parent?.path}`;
 
-		let destinationFolder = this.app.vault.getFolderByPath(destinationPath);
+		const destinationFolder =
+			this.app.vault.getFolderByPath(destinationPath);
 
 		if (destinationFolder == null) {
 			await this.app.vault.createFolder(destinationPath);
@@ -93,7 +112,19 @@ export default class SimpleArchiver extends Plugin {
 			`${this.settings.archiveFolder}/${file.path}`
 		);
 
-		new Notice(`${file.name} archived`);
+		return true;
+	}
+
+	async moveAllToArchive(files: TAbstractFile[]) {
+		let archived = 0;
+
+		for (const file of files) {
+			if (await this.moveToArchive(file)) {
+				archived++;
+			}
+		}
+
+		new Notice(`${archived} files archived`);
 	}
 
 	async loadSettings() {
