@@ -86,9 +86,12 @@ export default class SimpleArchiver extends Plugin {
 			return false;
 		}
 
-		const existingItem = this.app.vault.getAbstractFileByPath(
+		const destinationFilePath = normalizePath(
 			`${this.settings.archiveFolder}/${file.path}`
 		);
+
+		const existingItem =
+			this.app.vault.getAbstractFileByPath(destinationFilePath);
 
 		if (existingItem != null) {
 			new Notice(
@@ -98,7 +101,9 @@ export default class SimpleArchiver extends Plugin {
 			return false;
 		}
 
-		const destinationPath = `${this.settings.archiveFolder}/${file.parent?.path}`;
+		const destinationPath = normalizePath(
+			`${this.settings.archiveFolder}/${file.parent?.path}`
+		);
 
 		const destinationFolder =
 			this.app.vault.getFolderByPath(destinationPath);
@@ -107,10 +112,7 @@ export default class SimpleArchiver extends Plugin {
 			await this.app.vault.createFolder(destinationPath);
 		}
 
-		await this.app.fileManager.renameFile(
-			file,
-			`${this.settings.archiveFolder}/${file.path}`
-		);
+		await this.app.fileManager.renameFile(file, destinationFilePath);
 
 		return true;
 	}
