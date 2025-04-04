@@ -1,6 +1,6 @@
 {
 	"name": "simple-archiver",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Send old, stinky notes to the archive, where they belong.",
 	"main": "main.js",
 	"scripts": {
