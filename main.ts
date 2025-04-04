@@ -81,7 +81,7 @@ export default class SimpleArchiver extends Plugin {
 		);
 	}
 
-	async moveToArchive(file: TAbstractFile): Promise<boolean> {
+	private async moveToArchive(file: TAbstractFile): Promise<boolean> {
 		if (file.path.startsWith(this.settings.archiveFolder)) {
 			return false;
 		}
@@ -115,7 +115,7 @@ export default class SimpleArchiver extends Plugin {
 		return true;
 	}
 
-	async moveAllToArchive(files: TAbstractFile[]) {
+	private async moveAllToArchive(files: TAbstractFile[]) {
 		let archived = 0;
 
 		for (const file of files) {
@@ -127,7 +127,7 @@ export default class SimpleArchiver extends Plugin {
 		new Notice(`${archived} files archived`);
 	}
 
-	async loadSettings() {
+	private async loadSettings() {
 		this.settings = Object.assign(
 			{},
 			DEFAULT_SETTINGS,
@@ -156,16 +156,34 @@ class SimpleArchiverSettingsTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Archive folder")
 			.setDesc(
-				"The folder to use as the Archive. If the folder doesn't exist, it will be created when archiving a note."
+				"The folder to use as the Archive. If the folder doesn't exist, it will be created when archiving a " +
+					'note. Folder names must not contain "\\", "/" or ":" and must not start with ".".'
 			)
 			.addText((text) =>
 				text
 					.setPlaceholder("Archive folder")
 					.setValue(normalizePath(this.plugin.settings.archiveFolder))
 					.onChange(async (value) => {
-						this.plugin.settings.archiveFolder = value;
-						await this.plugin.saveSettings();
+						if (this.setArchiveFolder(value)) {
+							await this.plugin.saveSettings();
+						} else {
+							text.setValue(this.plugin.settings.archiveFolder);
+						}
 					})
 			);
+	}
+
+	private validateArchiveFolderName(value: string): boolean {
+		// Validate folder does not start with '.', contain ':' or contain a relative path
+		return !/^\.|[:/\\]\.|:/.test(value);
+	}
+
+	private setArchiveFolder(value: string): boolean {
+		if (!this.validateArchiveFolderName(value)) {
+			return false;
+		}
+
+		this.plugin.settings.archiveFolder = value;
+		return true;
 	}
 }
