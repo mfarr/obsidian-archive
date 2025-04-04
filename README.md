@@ -2,7 +2,7 @@
 
 > _Move old, stinky notes and folders to an archive, where they belong!_
 
-Simple Archiver moves files or an entire folder to an archive folder that you specify in the plugin's settings. The items are moved to the same relative path in the archive. If the base archive folder doesn't exist when you send something to the archive, it will be created automatically.
+Simple Archiver moves files or an entire folder to an archive folder that you configure. The items are moved to the same relative path in the archive folder.
 
 Archiving can be done via:
 
@@ -10,12 +10,12 @@ Archiving can be done via:
 -   `Move to archive` file menu item
 -   `Move all to archive` multi-file menu item
 
+## Planned Improvements
+
+-   Archiving a folder that already exists in the archive merges the contents
+-   Archiving a file that already exists in the archive gives the option to rename, replace or cancel
+-   Unarchive a file or folder
+
 ## Known Issues & Limitations
 
 -   Archiving a file or folder that already exists at the same path in the archive will fail
--   Archive folder setting value is not checked for validity
-
-## Planned Improvements
-
--   Archiving a folder that already exists in archive merges the contents
--   Unarchive
