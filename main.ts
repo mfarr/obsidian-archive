@@ -14,6 +14,11 @@ interface SimpleArchiverSettings {
 	archiveFolder: string;
 }
 
+interface ArchiveResult {
+	success: boolean;
+	message: string;
+}
+
 const DEFAULT_SETTINGS: SimpleArchiverSettings = {
 	archiveFolder: "Archive",
 };
@@ -60,9 +65,8 @@ export default class SimpleArchiver extends Plugin {
 					item.setTitle("Move to archive")
 						.setIcon("archive")
 						.onClick(async () => {
-							if (await this.moveToArchive(file)) {
-								new Notice(`${file.name} archived`);
-							}
+							const result = await this.moveToArchive(file);
+							new Notice(result.message);
 						});
 				});
 			})
@@ -81,9 +85,9 @@ export default class SimpleArchiver extends Plugin {
 		);
 	}
 
-	private async moveToArchive(file: TAbstractFile): Promise<boolean> {
+	private async moveToArchive(file: TAbstractFile): Promise<ArchiveResult> {
 		if (file.path.startsWith(this.settings.archiveFolder)) {
-			return false;
+			return { success: false, message: "Item is already archived" };
 		}
 
 		const destinationFilePath = normalizePath(
@@ -94,11 +98,10 @@ export default class SimpleArchiver extends Plugin {
 			this.app.vault.getAbstractFileByPath(destinationFilePath);
 
 		if (existingItem != null) {
-			new Notice(
-				`Unable to archive ${file.name}, item already exists in archive`
-			);
-
-			return false;
+			return {
+				success: false,
+				message: `Unable to archive ${file.name}, an item with the same name and path already exists in the archive`,
+			};
 		}
 
 		const destinationPath = normalizePath(
@@ -114,14 +117,14 @@ export default class SimpleArchiver extends Plugin {
 
 		await this.app.fileManager.renameFile(file, destinationFilePath);
 
-		return true;
+		return { success: true, message: `${file.name} archived successfully` };
 	}
 
 	private async moveAllToArchive(files: TAbstractFile[]) {
 		let archived = 0;
 
 		for (const file of files) {
-			if (await this.moveToArchive(file)) {
+			if ((await this.moveToArchive(file)).success) {
 				archived++;
 			}
 		}
