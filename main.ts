@@ -2,6 +2,7 @@ import {
 	App,
 	Editor,
 	MarkdownView,
+	Modal,
 	normalizePath,
 	Notice,
 	Plugin,
@@ -142,6 +143,41 @@ export default class SimpleArchiver extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+}
+
+class SimpleArchiverPromptModal extends Modal {
+	constructor(
+		app: App,
+		title: string,
+		message: string,
+		yesButtonText: string,
+		noButtonText: string,
+		callback: () => Promise<void>,
+		cancelCallback: () => Promise<void>
+	) {
+		super(app);
+
+		this.setTitle(title);
+
+		this.setContent(message);
+
+		new Setting(this.contentEl)
+			.addButton((btn) =>
+				btn
+					.setButtonText(yesButtonText)
+					.setWarning()
+					.onClick(() => {
+						callback();
+						this.close();
+					})
+			)
+			.addButton((btn) =>
+				btn.setButtonText(noButtonText).onClick(() => {
+					cancelCallback();
+					this.close();
+				})
+			);
 	}
 }
 
