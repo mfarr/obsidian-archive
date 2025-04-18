@@ -13,7 +13,7 @@ Archiving can be done via:
 ## Planned Improvements
 
 -   Archiving a folder that already exists in the archive merges the contents
--   Archiving a file that already exists in the archive gives the option to renameo
+-   Archiving a file that already exists in the archive gives the option to rename
 -   Unarchive a file or folder
 
 ## Release Notes
