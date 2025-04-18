@@ -13,9 +13,27 @@ Archiving can be done via:
 ## Planned Improvements
 
 -   Archiving a folder that already exists in the archive merges the contents
--   Archiving a file that already exists in the archive gives the option to rename, replace or cancel
+-   Archiving a file that already exists in the archive gives the option to renameo
 -   Unarchive a file or folder
 
-## Known Issues & Limitations
+## Release Notes
 
--   Archiving a file or folder that already exists at the same path in the archive will fail
+### v0.4.0
+
+-   **New**: Add "replace" option when attempting to archive a file or folder when an item with the same name and path already exists in the archive.
+
+### v0.3.1
+
+-   **Fix**: Unable to archive files/folders in the vault root
+
+### v0.3.1
+
+-   **New**: Validate archive folder name setting before saving
+
+### v0.2.0
+
+-   **New**: Allow multiple files to be archived
+
+### v0.1.0
+
+-   **New**: Basic archive functionality
