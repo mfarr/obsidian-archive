@@ -2,6 +2,7 @@ import {
 	App,
 	Editor,
 	MarkdownView,
+	Modal,
 	normalizePath,
 	Notice,
 	Plugin,
@@ -12,6 +13,11 @@ import {
 
 interface SimpleArchiverSettings {
 	archiveFolder: string;
+}
+
+interface ArchiveResult {
+	success: boolean;
+	message: string;
 }
 
 const DEFAULT_SETTINGS: SimpleArchiverSettings = {
@@ -38,7 +44,9 @@ export default class SimpleArchiver extends Plugin {
 
 				if (canBeArchived && view.file != null) {
 					if (!checking) {
-						this.moveToArchive(view.file);
+						this.archiveFile(view.file).then((result) => {
+							new Notice(result.message);
+						});
 					}
 
 					return true;
@@ -60,8 +68,12 @@ export default class SimpleArchiver extends Plugin {
 					item.setTitle("Move to archive")
 						.setIcon("archive")
 						.onClick(async () => {
-							if (await this.moveToArchive(file)) {
-								new Notice(`${file.name} archived`);
+							const result = await this.archiveFile(file);
+
+							if (result.success) {
+								new Notice(result.message);
+							} else {
+								new Error(result.message);
 							}
 						});
 				});
@@ -74,16 +86,16 @@ export default class SimpleArchiver extends Plugin {
 					item.setTitle("Move all to archive")
 						.setIcon("archive")
 						.onClick(async () => {
-							await this.moveAllToArchive(files);
+							await this.archiveAllFiles(files);
 						});
 				});
 			})
 		);
 	}
 
-	private async moveToArchive(file: TAbstractFile): Promise<boolean> {
+	private async archiveFile(file: TAbstractFile): Promise<ArchiveResult> {
 		if (file.path.startsWith(this.settings.archiveFolder)) {
-			return false;
+			return { success: false, message: "Item is already archived" };
 		}
 
 		const destinationFilePath = normalizePath(
@@ -94,13 +106,51 @@ export default class SimpleArchiver extends Plugin {
 			this.app.vault.getAbstractFileByPath(destinationFilePath);
 
 		if (existingItem != null) {
-			new Notice(
-				`Unable to archive ${file.name}, item already exists in archive`
-			);
+			// Same item exists in archive, prompt to replace
+			return new Promise<ArchiveResult>((resolve) => {
+				const prompt = new SimpleArchiverPromptModal(
+					this.app,
+					"Replace archived item?",
+					`An item called "${file.name}" already exists in the destination folder in the archive. Would you like to replace it?`,
+					"Replace",
+					"Cancel",
+					async () => {
+						await this.app.fileManager.trashFile(existingItem);
+						const response = await this.moveFileToArchive(file);
 
-			return false;
+						resolve(response);
+					},
+					async () => {
+						resolve({
+							success: false,
+							message: "Archive operation cancelled",
+						});
+					}
+				);
+				prompt.open();
+			});
 		}
 
+		// If no existing item, proceed with archiving
+		const response = await this.moveFileToArchive(file);
+		return response;
+	}
+
+	private async archiveAllFiles(files: TAbstractFile[]) {
+		let archived = 0;
+
+		for (const file of files) {
+			if ((await this.archiveFile(file)).success) {
+				archived++;
+			}
+		}
+
+		new Notice(`${archived} files archived`);
+	}
+
+	private async moveFileToArchive(
+		file: TAbstractFile
+	): Promise<ArchiveResult> {
 		const destinationPath = normalizePath(
 			`${this.settings.archiveFolder}/${file.parent?.path}`
 		);
@@ -112,21 +162,22 @@ export default class SimpleArchiver extends Plugin {
 			await this.app.vault.createFolder(destinationPath);
 		}
 
-		await this.app.fileManager.renameFile(file, destinationFilePath);
+		const destinationFilePath = normalizePath(
+			`${destinationPath}/${file.name}`
+		);
 
-		return true;
-	}
-
-	private async moveAllToArchive(files: TAbstractFile[]) {
-		let archived = 0;
-
-		for (const file of files) {
-			if (await this.moveToArchive(file)) {
-				archived++;
-			}
+		try {
+			await this.app.fileManager.renameFile(file, destinationFilePath);
+			return {
+				success: true,
+				message: `${file.name} archived successfully`,
+			};
+		} catch (error) {
+			return {
+				success: false,
+				message: `Unable to archive ${file.name}: ${error}`,
+			};
 		}
-
-		new Notice(`${archived} files archived`);
 	}
 
 	private async loadSettings() {
@@ -139,6 +190,41 @@ export default class SimpleArchiver extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+}
+
+class SimpleArchiverPromptModal extends Modal {
+	constructor(
+		app: App,
+		title: string,
+		message: string,
+		yesButtonText: string,
+		noButtonText: string,
+		callback: () => Promise<void>,
+		cancelCallback: () => Promise<void>
+	) {
+		super(app);
+
+		this.setTitle(title);
+
+		this.setContent(message);
+
+		new Setting(this.contentEl)
+			.addButton((btn) =>
+				btn
+					.setButtonText(yesButtonText)
+					.setWarning()
+					.onClick(() => {
+						callback();
+						this.close();
+					})
+			)
+			.addButton((btn) =>
+				btn.setButtonText(noButtonText).onClick(() => {
+					cancelCallback();
+					this.close();
+				})
+			);
 	}
 }
 
