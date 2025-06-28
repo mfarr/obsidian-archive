@@ -38,9 +38,8 @@ export default class SimpleArchiver extends Plugin {
 				editor: Editor,
 				view: MarkdownView
 			) => {
-				const canBeArchived = !view.file?.path.startsWith(
-					this.settings.archiveFolder
-				);
+				const canBeArchived =
+					view.file && !this.isFileArchived(view.file);
 
 				if (canBeArchived && view.file != null) {
 					if (!checking) {
@@ -58,9 +57,10 @@ export default class SimpleArchiver extends Plugin {
 
 		this.addSettingTab(new SimpleArchiverSettingsTab(this.app, this));
 
+		// Archive file context menu
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, file) => {
-				if (file.path.startsWith(this.settings.archiveFolder)) {
+				if (this.isFileArchived(file)) {
 					return;
 				}
 
@@ -82,6 +82,10 @@ export default class SimpleArchiver extends Plugin {
 
 		this.registerEvent(
 			this.app.workspace.on("files-menu", (menu, files) => {
+				if (files.some((file) => this.isFileArchived(file))) {
+					return;
+				}
+
 				menu.addItem((item) => {
 					item.setTitle("Move all to archive")
 						.setIcon("archive")
@@ -91,10 +95,13 @@ export default class SimpleArchiver extends Plugin {
 				});
 			})
 		);
+
+	private isFileArchived(file: TAbstractFile): boolean {
+		return file.path.startsWith(this.settings.archiveFolder);
 	}
 
 	private async archiveFile(file: TAbstractFile): Promise<ArchiveResult> {
-		if (file.path.startsWith(this.settings.archiveFolder)) {
+		if (this.isFileArchived(file)) {
 			return { success: false, message: "Item is already archived" };
 		}
 
