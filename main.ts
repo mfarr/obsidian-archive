@@ -107,8 +107,13 @@ export default class SimpleArchiver extends Plugin {
 					item.setTitle("Move out of archive")
 						.setIcon("archive-restore")
 						.onClick(async () => {
-							// TODO: Implement unarchive logic
-							console.log("Unarchiving file:", file.path);
+							const result = await this.unarchiveFile(file);
+
+							if (result.success) {
+								new Notice(result.message);
+							} else {
+								new Error(result.message);
+							}
 						});
 				});
 			})
@@ -124,11 +129,7 @@ export default class SimpleArchiver extends Plugin {
 					item.setTitle("Move all out of archive")
 						.setIcon("archive-restore")
 						.onClick(async () => {
-							// TODO: Implement unarchive logic
-							console.log(
-								"Unarchiving files:",
-								files.map((f) => f.path)
-							);
+							await this.unarchiveAllFiles(files);
 						});
 				});
 			})
@@ -224,6 +225,92 @@ export default class SimpleArchiver extends Plugin {
 				message: `Unable to archive ${file.name}: ${error}`,
 			};
 		}
+	}
+
+	private async moveFileOutOfArchive(
+		file: TAbstractFile
+	): Promise<ArchiveResult> {
+		const originalPath = file.path.substring(
+			this.settings.archiveFolder.length + 1
+		);
+		const originalParentPath = originalPath.substring(
+			0,
+			originalPath.lastIndexOf("/")
+		);
+
+		const originalFolder =
+			this.app.vault.getFolderByPath(originalParentPath);
+
+		console.log(originalPath, originalParentPath, originalFolder);
+
+		if (originalFolder == null) {
+			await this.app.vault.createFolder(originalParentPath);
+		}
+
+		try {
+			await this.app.fileManager.renameFile(file, originalPath);
+			return {
+				success: true,
+				message: `${file.name} unarchived successfully`,
+			};
+		} catch (error) {
+			return {
+				success: false,
+				message: `Unable to unarchive ${file.name}: ${error}`,
+			};
+		}
+	}
+
+	private async unarchiveFile(file: TAbstractFile): Promise<ArchiveResult> {
+		if (!this.isFileArchived(file)) {
+			return { success: false, message: "Item is not archived" };
+		}
+
+		const originalPath = file.path.substring(
+			this.settings.archiveFolder.length + 1
+		);
+
+		const existingItem = this.app.vault.getAbstractFileByPath(originalPath);
+
+		if (existingItem != null) {
+			return new Promise<ArchiveResult>((resolve) => {
+				const prompt = new SimpleArchiverPromptModal(
+					this.app,
+					"Replace existing item?",
+					`An item called "${file.name}" already exists in the original location. Would you like to replace it?`,
+					"Replace",
+					"Cancel",
+					async () => {
+						await this.app.fileManager.trashFile(existingItem);
+						const response = await this.moveFileOutOfArchive(file);
+
+						resolve(response);
+					},
+					async () => {
+						resolve({
+							success: false,
+							message: "Unarchive operation cancelled",
+						});
+					}
+				);
+				prompt.open();
+			});
+		}
+
+		const response = await this.moveFileOutOfArchive(file);
+		return response;
+	}
+
+	private async unarchiveAllFiles(files: TAbstractFile[]) {
+		let unarchived = 0;
+
+		for (const file of files) {
+			if ((await this.unarchiveFile(file)).success) {
+				unarchived++;
+			}
+		}
+
+		new Notice(`${unarchived} files unarchived`);
 	}
 
 	private async loadSettings() {
