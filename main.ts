@@ -96,6 +96,45 @@ export default class SimpleArchiver extends Plugin {
 			})
 		);
 
+		// Unarchive file context menu
+		this.registerEvent(
+			this.app.workspace.on("file-menu", (menu, file) => {
+				if (!this.isFileArchived(file)) {
+					return;
+				}
+
+				menu.addItem((item) => {
+					item.setTitle("Move out of archive")
+						.setIcon("archive-restore")
+						.onClick(async () => {
+							// TODO: Implement unarchive logic
+							console.log("Unarchiving file:", file.path);
+						});
+				});
+			})
+		);
+
+		this.registerEvent(
+			this.app.workspace.on("files-menu", (menu, files) => {
+				if (files.some((file) => !this.isFileArchived(file))) {
+					return;
+				}
+
+				menu.addItem((item) => {
+					item.setTitle("Move all out of archive")
+						.setIcon("archive-restore")
+						.onClick(async () => {
+							// TODO: Implement unarchive logic
+							console.log(
+								"Unarchiving files:",
+								files.map((f) => f.path)
+							);
+						});
+				});
+			})
+		);
+	}
+
 	private isFileArchived(file: TAbstractFile): boolean {
 		return file.path.startsWith(this.settings.archiveFolder);
 	}
