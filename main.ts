@@ -55,6 +55,31 @@ export default class SimpleArchiver extends Plugin {
 			},
 		});
 
+		this.addCommand({
+			id: "move-out-of-archive",
+			name: "Move out of archive",
+			editorCheckCallback: (
+				checking: boolean,
+				editor: Editor,
+				view: MarkdownView
+			) => {
+				const canBeUnarchived =
+					view.file && this.isFileArchived(view.file);
+
+				if (canBeUnarchived && view.file != null) {
+					if (!checking) {
+						this.unarchiveFile(view.file).then((result) => {
+							new Notice(result.message);
+						});
+					}
+
+					return true;
+				}
+
+				return false;
+			},
+		});
+
 		this.addSettingTab(new SimpleArchiverSettingsTab(this.app, this));
 
 		// Archive file context menu
