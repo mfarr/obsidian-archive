@@ -263,13 +263,13 @@ export default class SimpleArchiver extends Plugin {
 			originalPath.lastIndexOf("/")
 		);
 
-		const originalFolder =
-			this.app.vault.getFolderByPath(originalParentPath);
+		if (originalParentPath) {
+			const originalFolder =
+				this.app.vault.getFolderByPath(originalParentPath);
 
-		console.log(originalPath, originalParentPath, originalFolder);
-
-		if (originalFolder == null) {
-			await this.app.vault.createFolder(originalParentPath);
+			if (originalFolder == null) {
+				await this.app.vault.createFolder(originalParentPath);
+			}
 		}
 
 		try {
