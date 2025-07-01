@@ -22,7 +22,7 @@ Unarchiving can be done via:
 
 ## Release Notes
 
-### v0.5.0
+### v0.5.1
 
 -   **New**: Add `Move out of archive` functionality to files/folders that exist in the archive. Items will be moved out of the archive into their original location (issue #5). Thank you to [nicholaslck](https://github.com/nicholaslck)!
 
