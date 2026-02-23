@@ -15,6 +15,36 @@ Unarchiving can be done via:
 - `Move out of archive` file menu item
 - `Move all out of archive` multi-file menu item
 
+## Auto-Archive
+
+Auto-archive lets you define rules that periodically move matching files into your archive folder. Each rule targets a folder (optionally by regex), can include subfolders, and requires at least one condition. Conditions can be based on file age (days since last modified) and/or a file name regex. When a rule matches, files are archived to the same relative path under your archive folder.
+
+How it works:
+
+- Rules are evaluated on a schedule (default every 60 minutes).
+- The last auto-archive run time is saved, so short Obsidian sessions can still trigger catch-up runs on startup.
+- On startup, auto-archive waits for a configurable delay (default 30 seconds) before checking whether a run is due.
+- Multiple conditions can be combined with AND or OR.
+- Files already in the archive folder are skipped.
+
+How to use it:
+
+- Open Settings -> Simple Archiver -> Auto-Archive.
+- Set the auto-archive frequency and startup delay, and optionally click "Auto Archive Now" to run immediately.
+- Click "Add Rule", choose a folder path (or enable regex), decide whether to apply recursively, and add one or more conditions.
+- Optional: Right-click a folder and choose "Auto-archive" -> "Add rule" to prefill the folder path.
+- Optional: Right-click a folder and choose "Auto-archive" -> "Edit rule" to edit an existing rule.
+
+Example rule:
+
+```text
+Folder: Notes/Daily
+Apply recursively: No
+Conditions (AND):
+  - File age >= 30 days
+  - File name regex: ^\d{4}-\d{2}-\d{2}.*\.md$
+```
+
 ## Planned Improvements
 
 - Archiving a folder that already exists in the archive merges the contents
