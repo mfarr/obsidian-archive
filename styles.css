@@ -6,3 +6,85 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+
+/* Auto-archive settings styles */
+.setting-tab-container {
+	width: 100%;
+}
+
+.setting-tab-content {
+	padding-top: 12px;
+}
+
+.setting-tab-buttons {
+	display: flex;
+	gap: 8px;
+	margin-bottom: 20px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.setting-tab-button {
+	padding: 8px 16px;
+	background: transparent;
+	border: none;
+	border-bottom: 2px solid transparent;
+	cursor: pointer;
+	font-size: 14px;
+	color: var(--text-muted);
+}
+
+.setting-tab-button.active {
+	color: var(--text-normal);
+	border-bottom-color: var(--interactive-accent);
+}
+
+.setting-tab-button:hover {
+	color: var(--text-normal);
+}
+
+.auto-archive-rules-container {
+	margin-top: 20px;
+}
+
+.auto-archive-rule {
+	padding: 16px;
+	margin-bottom: 16px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background-color: var(--background-secondary);
+}
+
+.auto-archive-rule-header {
+	border-bottom: 1px solid var(--background-modifier-border);
+	padding-bottom: 8px;
+	margin-bottom: 8px;
+}
+
+.auto-archive-rule-conditions {
+	padding-left: 16px;
+	font-size: 0.9em;
+	color: var(--text-muted);
+}
+
+.auto-archive-rule-logic {
+	margin-top: 4px;
+	margin-bottom: 8px;
+	font-weight: 600;
+	color: var(--text-accent);
+}
+
+.auto-archive-rule-condition {
+	margin-top: 4px;
+}
+
+.auto-archive-conditions-container {
+	margin: 16px 0;
+}
+
+.auto-archive-condition {
+	margin-bottom: 12px;
+	padding: 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background-color: var(--background-primary);
+}
