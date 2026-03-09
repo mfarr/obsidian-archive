@@ -44,10 +44,12 @@ export class SimpleArchiverPromptModal extends Modal {
 export class AutoArchiveRuleModal extends Modal {
 	plugin: SimpleArchiver;
 	rule: AutoArchiveRule;
+	draftRule: AutoArchiveRule;
 	onSave: () => Promise<void>;
 	onCancel?: () => Promise<void>;
 	folderPathInput: HTMLInputElement;
 	validationErrorEl: HTMLDivElement;
+	closeReason: "none" | "saved" | "cancelled" = "none";
 
 	constructor(
 		app: App,
@@ -59,6 +61,7 @@ export class AutoArchiveRuleModal extends Modal {
 		super(app);
 		this.plugin = plugin;
 		this.rule = rule;
+		this.draftRule = this.cloneRule(rule);
 		this.onSave = onSave;
 		this.onCancel = onCancel;
 	}
@@ -85,9 +88,9 @@ export class AutoArchiveRuleModal extends Modal {
 			.addText((text) => {
 				this.folderPathInput = text.inputEl;
 				text.setPlaceholder("folder/path")
-					.setValue(this.rule.folderPath)
+					.setValue(this.draftRule.folderPath)
 					.onChange((value) => {
-						this.rule.folderPath = value;
+						this.draftRule.folderPath = value;
 					});
 			});
 
@@ -98,9 +101,9 @@ export class AutoArchiveRuleModal extends Modal {
 			)
 			.addToggle((toggle) =>
 				toggle
-					.setValue(this.rule.useFolderRegex || false)
+					.setValue(this.draftRule.useFolderRegex || false)
 					.onChange((value) => {
-						this.rule.useFolderRegex = value;
+						this.draftRule.useFolderRegex = value;
 					}),
 			);
 
@@ -111,9 +114,9 @@ export class AutoArchiveRuleModal extends Modal {
 			)
 			.addToggle((toggle) =>
 				toggle
-					.setValue(this.rule.applyRecursively || false)
+					.setValue(this.draftRule.applyRecursively || false)
 					.onChange((value) => {
-						this.rule.applyRecursively = value;
+						this.draftRule.applyRecursively = value;
 					}),
 			);
 
@@ -124,9 +127,9 @@ export class AutoArchiveRuleModal extends Modal {
 				dropdown
 					.addOption("AND", "AND (all conditions must match)")
 					.addOption("OR", "OR (any condition must match)")
-					.setValue(this.rule.logicOperator || "AND")
+					.setValue(this.draftRule.logicOperator || "AND")
 					.onChange((value) => {
-						this.rule.logicOperator = value as "AND" | "OR";
+						this.draftRule.logicOperator = value as "AND" | "OR";
 					}),
 			);
 
@@ -156,23 +159,16 @@ export class AutoArchiveRuleModal extends Modal {
 							return;
 						}
 
+						this.applyDraftToRule();
 						await this.onSave();
+						this.closeReason = "saved";
 						this.close();
 					}),
 			)
 			.addButton((button) =>
 				button.setButtonText("Cancel").onClick(async () => {
-					if (this.onCancel) {
-						await this.onCancel();
-					} else {
-						if (!this.rule.folderPath) {
-							this.plugin.settings.autoArchiveRules =
-								this.plugin.settings.autoArchiveRules.filter(
-									(r) => r.id !== this.rule.id,
-								);
-							await this.plugin.saveSettings();
-						}
-					}
+					await this.handleCancel();
+					this.closeReason = "cancelled";
 					this.close();
 				}),
 			);
@@ -181,7 +177,7 @@ export class AutoArchiveRuleModal extends Modal {
 	private displayConditions(containerEl: HTMLElement): void {
 		containerEl.empty();
 
-		if (this.rule.conditions.length === 0) {
+		if (this.draftRule.conditions.length === 0) {
 			containerEl.createEl("p", {
 				text: "No conditions added yet. Add at least one condition.",
 				cls: "setting-item-description",
@@ -189,8 +185,8 @@ export class AutoArchiveRuleModal extends Modal {
 			return;
 		}
 
-		for (let i = 0; i < this.rule.conditions.length; i++) {
-			const condition = this.rule.conditions[i];
+		for (let i = 0; i < this.draftRule.conditions.length; i++) {
+			const condition = this.draftRule.conditions[i];
 			this.displayCondition(containerEl, condition, i);
 		}
 	}
@@ -242,14 +238,14 @@ export class AutoArchiveRuleModal extends Modal {
 					.setButtonText("Remove")
 					.setWarning()
 					.onClick(() => {
-						this.rule.conditions.splice(index, 1);
+						this.draftRule.conditions.splice(index, 1);
 						this.displayConditions(containerEl);
 					}),
 			);
 	}
 
 	private addCondition(): void {
-		this.rule.conditions.push({
+		this.draftRule.conditions.push({
 			type: "fileAge",
 			value: "",
 		});
@@ -263,8 +259,36 @@ export class AutoArchiveRuleModal extends Modal {
 	}
 
 	private validateRule(): string | null {
-		if (this.rule.conditions.length === 0) {
+		const folderPath = (this.draftRule.folderPath ?? "").trim();
+		if (!folderPath) {
+			return "Folder path is required.";
+		}
+
+		if (this.draftRule.conditions.length === 0) {
 			return "Cannot save rule with no conditions.";
+		}
+
+		for (let index = 0; index < this.draftRule.conditions.length; index++) {
+			const condition = this.draftRule.conditions[index];
+			const conditionValue = (condition.value ?? "").trim();
+			if (!conditionValue) {
+				return `Condition ${index + 1} requires a value.`;
+			}
+
+			if (condition.type === "fileAge") {
+				const dayCount = Number(conditionValue);
+				if (!Number.isInteger(dayCount) || dayCount <= 0) {
+					return `Condition ${index + 1} must be a positive whole number of days.`;
+				}
+			}
+
+			if (condition.type === "regexPattern") {
+				try {
+					new RegExp(conditionValue);
+				} catch {
+					return `Condition ${index + 1} has an invalid regular expression.`;
+				}
+			}
 		}
 
 		const archiveFolder = this.normalizeRulePath(
@@ -275,9 +299,9 @@ export class AutoArchiveRuleModal extends Modal {
 			return null;
 		}
 
-		if (this.rule.useFolderRegex) {
+		if (this.draftRule.useFolderRegex) {
 			try {
-				const folderRegex = new RegExp(this.rule.folderPath);
+				const folderRegex = new RegExp(this.draftRule.folderPath);
 				if (folderRegex.test(archiveFolder)) {
 					return "Rule folder path cannot match the archive folder path.";
 				}
@@ -288,7 +312,9 @@ export class AutoArchiveRuleModal extends Modal {
 			return null;
 		}
 
-		const ruleFolderPath = this.normalizeRulePath(this.rule.folderPath);
+		const ruleFolderPath = this.normalizeRulePath(
+			this.draftRule.folderPath,
+		);
 		if (this.isArchiveFolderOverlap(ruleFolderPath, archiveFolder)) {
 			return "Rule folder path cannot match or overlap with the archive folder path.";
 		}
@@ -334,8 +360,46 @@ export class AutoArchiveRuleModal extends Modal {
 		return archiveFolderPath.startsWith(`${ruleFolderPath}/`);
 	}
 
+	private cloneRule(rule: AutoArchiveRule): AutoArchiveRule {
+		return {
+			...rule,
+			conditions: rule.conditions.map((condition) => ({
+				...condition,
+			})),
+		};
+	}
+
+	private applyDraftToRule(): void {
+		this.rule.enabled = this.draftRule.enabled;
+		this.rule.folderPath = this.draftRule.folderPath;
+		this.rule.useFolderRegex = this.draftRule.useFolderRegex;
+		this.rule.applyRecursively = this.draftRule.applyRecursively;
+		this.rule.logicOperator = this.draftRule.logicOperator;
+		this.rule.conditions = this.draftRule.conditions.map((condition) => ({
+			...condition,
+		}));
+	}
+
+	private async handleCancel(): Promise<void> {
+		if (this.onCancel) {
+			await this.onCancel();
+			return;
+		}
+
+		if (!this.rule.folderPath) {
+			this.plugin.settings.autoArchiveRules =
+				this.plugin.settings.autoArchiveRules.filter(
+					(r) => r.id !== this.rule.id,
+				);
+			await this.plugin.saveSettings();
+		}
+	}
+
 	onClose() {
 		const { contentEl } = this;
+		if (this.closeReason === "none") {
+			void this.handleCancel();
+		}
 		contentEl.empty();
 	}
 }
