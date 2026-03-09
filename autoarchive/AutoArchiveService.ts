@@ -24,6 +24,17 @@ const SETTINGS_TAB_RENDER_DELAY_MS = 200;
 const MAX_FILES_PER_CYCLE = 500;
 const DEFAULT_REGEX_TIMEOUT_MS = 100;
 
+type MenuEntry = {
+	setTitle(title: string): MenuEntry;
+	setIcon(icon: string): MenuEntry;
+	onClick(callback: () => void): MenuEntry;
+	setSubmenu?: () => MenuGroup;
+};
+
+type MenuGroup = {
+	addItem(callback: (item: MenuEntry) => void): void;
+};
+
 export class AutoArchiveService {
 	private app: App;
 	private getSettings: () => SimpleArchiverSettings;
@@ -400,7 +411,7 @@ export class AutoArchiveService {
 					}
 
 					// Add "Add rule" item
-					submenu.addItem((subitem: any) => {
+					submenu.addItem((subitem: MenuEntry) => {
 						subitem
 							.setTitle("Add rule")
 							.setIcon("plus")
@@ -417,7 +428,7 @@ export class AutoArchiveService {
 
 					if (existingRules.length > 0) {
 						// Add "Edit Rule" submenu item
-						submenu.addItem((subitem: any) => {
+						submenu.addItem((subitem: MenuEntry) => {
 							subitem.setTitle("Edit Rule").setIcon("pencil");
 
 							const editSubmenu = this.getSubmenu(subitem);
@@ -425,7 +436,7 @@ export class AutoArchiveService {
 
 							// Add each rule as a submenu item
 							for (const rule of existingRules) {
-								editSubmenu.addItem((ruleItem: any) => {
+								editSubmenu.addItem((ruleItem: MenuEntry) => {
 									const displayText =
 										this.getRuleDisplayText(rule);
 									const icon = rule.enabled
@@ -457,7 +468,7 @@ export class AutoArchiveService {
 	/**
 	 * Safely retrieves submenu from menu item with type safety.
 	 */
-	private getSubmenu(item: any): any | null {
+	private getSubmenu(item: MenuEntry): MenuGroup | null {
 		try {
 			return typeof item.setSubmenu === "function"
 				? item.setSubmenu()
@@ -473,7 +484,7 @@ export class AutoArchiveService {
 		folderPath: string,
 	): void {
 		try {
-			const obsidianApis = this.app as any as ObsidianInternalApis;
+			const obsidianApis = this.app as unknown as ObsidianInternalApis;
 			if (!obsidianApis.setting) {
 				console.error("Unable to access settings API");
 				return;

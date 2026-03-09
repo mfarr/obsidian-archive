@@ -34,6 +34,6 @@ export interface ObsidianInternalApis {
 	setting: {
 		open(): void;
 		openTabById(pluginId: string): void;
-		pluginTabs: any[];
+		pluginTabs: unknown[];
 	};
 }
