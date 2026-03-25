@@ -9,6 +9,7 @@ import {
 } from "obsidian";
 
 import type {
+	AutoArchiveRuntimeData,
 	AutoArchiveCondition,
 	AutoArchiveRule,
 	SimpleArchiverSettings,
@@ -37,7 +38,7 @@ type MenuGroup = {
 
 export class AutoArchiveService {
 	private app: App;
-	private getSettings: () => SimpleArchiverSettings;
+	private getSettings: () => SimpleArchiverSettings & AutoArchiveRuntimeData;
 	private archiveFile: (file: TAbstractFile) => Promise<ArchiveResult>;
 	private isFileArchived: (file: TAbstractFile) => boolean;
 	private persistLastAutoArchiveRunAt: (lastRunAt: number) => Promise<void>;
@@ -47,7 +48,7 @@ export class AutoArchiveService {
 
 	constructor(
 		app: App,
-		getSettings: () => SimpleArchiverSettings,
+		getSettings: () => SimpleArchiverSettings & AutoArchiveRuntimeData,
 		archiveFile: (file: TAbstractFile) => Promise<ArchiveResult>,
 		isFileArchived: (file: TAbstractFile) => boolean,
 		persistLastAutoArchiveRunAt: (lastRunAt: number) => Promise<void>,

@@ -1,7 +1,11 @@
 import { App, TAbstractFile } from "obsidian";
 
 import { AutoArchiveService } from "./AutoArchiveService";
-import type { ArchiveResult, SimpleArchiverSettings } from "./AutoArchiveTypes";
+import type {
+	ArchiveResult,
+	AutoArchiveRuntimeData,
+	SimpleArchiverSettings,
+} from "./AutoArchiveTypes";
 
 /**
  * Factory function to create and configure an AutoArchiveService instance.
@@ -18,7 +22,7 @@ import type { ArchiveResult, SimpleArchiverSettings } from "./AutoArchiveTypes";
  */
 export function createAutoArchiveService(
 	app: App,
-	getSettings: () => SimpleArchiverSettings,
+	getSettings: () => SimpleArchiverSettings & AutoArchiveRuntimeData,
 	archiveFile: (file: TAbstractFile) => Promise<ArchiveResult>,
 	isFileArchived: (file: TAbstractFile) => boolean,
 	persistLastRunAt: (lastRunAt: number) => Promise<void>,

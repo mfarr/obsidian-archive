@@ -9,17 +9,22 @@ import {
 
 import {
 	AUTO_ARCHIVE_DEFAULT_SETTINGS,
+	AUTO_ARCHIVE_DEFAULT_RUNTIME_DATA,
 	migrateAutoArchiveSettings,
+	normalizeAutoArchiveRuntimeData,
 	createAutoArchiveService,
 	startAutoArchive,
 	stopAutoArchiveScheduler,
 	setupAutoArchiveContextMenu,
 	AutoArchiveService,
+	type AutoArchiveRuntimeData,
 	type ArchiveResult,
 	type SimpleArchiverSettings,
 } from "./autoarchive";
 import { SimpleArchiverPromptModal } from "./modals";
 import { SimpleArchiverSettingsTab } from "./SettingsTab";
+
+const AUTO_ARCHIVE_DATA_FILE = "autoarchive_data.json";
 
 const DEFAULT_SETTINGS: SimpleArchiverSettings = {
 	archiveFolder: "Archive",
@@ -28,6 +33,7 @@ const DEFAULT_SETTINGS: SimpleArchiverSettings = {
 
 export default class SimpleArchiver extends Plugin {
 	settings: SimpleArchiverSettings;
+	autoArchiveRuntimeData: AutoArchiveRuntimeData;
 	private autoArchiveService: AutoArchiveService;
 
 	async onload() {
@@ -85,12 +91,17 @@ export default class SimpleArchiver extends Plugin {
 
 		this.autoArchiveService = createAutoArchiveService(
 			this.app,
-			() => this.settings,
+			() => ({
+				...this.settings,
+				lastAutoArchiveRunAt:
+					this.autoArchiveRuntimeData.lastAutoArchiveRunAt,
+			}),
 			(file) => this.archiveFile(file),
 			(file) => this.isFileArchived(file),
 			async (lastRunAt) => {
-				this.settings.lastAutoArchiveRunAt = lastRunAt;
-				await this.saveSettings();
+				await this.saveAutoArchiveRuntimeData({
+					lastAutoArchiveRunAt: lastRunAt,
+				});
 			},
 		);
 		startAutoArchive(this.autoArchiveService);
@@ -421,22 +432,99 @@ export default class SimpleArchiver extends Plugin {
 	}
 
 	private async loadSettings() {
-		this.settings = Object.assign(
-			{},
-			DEFAULT_SETTINGS,
-			await this.loadData(),
-		);
+		const loadedData = await this.loadData();
+		const lastAutoArchiveRunAt =
+			this.getLegacyLastAutoArchiveRunAt(loadedData);
+
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
+
+		delete (
+			this.settings as Partial<SimpleArchiverSettings> & {
+				lastAutoArchiveRunAt?: number;
+			}
+		).lastAutoArchiveRunAt;
+
+		this.autoArchiveRuntimeData =
+			await this.loadAutoArchiveRuntimeData(lastAutoArchiveRunAt);
 
 		// Migrate auto-archive settings for backward compatibility
 		const { changed } = migrateAutoArchiveSettings(this.settings);
 
 		// Persist the migration if any changes were made
-		if (changed) {
+		if (changed || lastAutoArchiveRunAt !== null) {
 			await this.saveSettings();
 		}
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	async saveAutoArchiveRuntimeData(runtimeData: AutoArchiveRuntimeData) {
+		this.autoArchiveRuntimeData =
+			normalizeAutoArchiveRuntimeData(runtimeData);
+		await this.app.vault.adapter.write(
+			`${this.manifest.dir}/${AUTO_ARCHIVE_DATA_FILE}`,
+			JSON.stringify(this.autoArchiveRuntimeData, null, 2),
+		);
+	}
+
+	private async loadAutoArchiveRuntimeData(
+		legacyLastAutoArchiveRunAt: number | null,
+	): Promise<AutoArchiveRuntimeData> {
+		const existingRuntimeData = await this.readAutoArchiveRuntimeDataFile();
+
+		if (existingRuntimeData !== null) {
+			return existingRuntimeData;
+		}
+
+		const migratedRuntimeData = normalizeAutoArchiveRuntimeData({
+			lastAutoArchiveRunAt:
+				legacyLastAutoArchiveRunAt ??
+				AUTO_ARCHIVE_DEFAULT_RUNTIME_DATA.lastAutoArchiveRunAt,
+		});
+
+		if (legacyLastAutoArchiveRunAt !== null) {
+			await this.saveAutoArchiveRuntimeData(migratedRuntimeData);
+		}
+
+		return migratedRuntimeData;
+	}
+
+	private async readAutoArchiveRuntimeDataFile(): Promise<AutoArchiveRuntimeData | null> {
+		const runtimeDataPath = `${this.manifest.dir}/${AUTO_ARCHIVE_DATA_FILE}`;
+
+		if (!(await this.app.vault.adapter.exists(runtimeDataPath))) {
+			return null;
+		}
+
+		try {
+			const content = await this.app.vault.adapter.read(runtimeDataPath);
+			const parsedData = JSON.parse(
+				content,
+			) as Partial<AutoArchiveRuntimeData>;
+			return normalizeAutoArchiveRuntimeData(parsedData);
+		} catch (error) {
+			console.error("Failed to load auto-archive runtime data:", error);
+			return { ...AUTO_ARCHIVE_DEFAULT_RUNTIME_DATA };
+		}
+	}
+
+	private getLegacyLastAutoArchiveRunAt(loadedData: unknown): number | null {
+		if (
+			loadedData === null ||
+			typeof loadedData !== "object" ||
+			!("lastAutoArchiveRunAt" in loadedData)
+		) {
+			return null;
+		}
+
+		const { lastAutoArchiveRunAt } = loadedData as {
+			lastAutoArchiveRunAt?: unknown;
+		};
+
+		return typeof lastAutoArchiveRunAt === "number"
+			? lastAutoArchiveRunAt
+			: null;
 	}
 }

@@ -1,4 +1,5 @@
 import type {
+	AutoArchiveRuntimeData,
 	AutoArchiveRule,
 	SimpleArchiverSettings,
 } from "./AutoArchiveTypes";
@@ -11,6 +12,9 @@ export const AUTO_ARCHIVE_DEFAULT_SETTINGS: Partial<SimpleArchiverSettings> = {
 	autoArchiveRules: [],
 	autoArchiveFrequency: 60,
 	autoArchiveStartupDelaySeconds: 30,
+};
+
+export const AUTO_ARCHIVE_DEFAULT_RUNTIME_DATA: AutoArchiveRuntimeData = {
 	lastAutoArchiveRunAt: 0,
 };
 
@@ -61,15 +65,22 @@ export function migrateAutoArchiveSettings(settings: SimpleArchiverSettings): {
 			AUTO_ARCHIVE_DEFAULT_SETTINGS.autoArchiveStartupDelaySeconds ?? 30;
 	}
 
-	// Normalize last auto-archive run timestamp
+	return { settings, changed };
+}
+
+export function normalizeAutoArchiveRuntimeData(
+	runtimeData: Partial<AutoArchiveRuntimeData> | null | undefined,
+): AutoArchiveRuntimeData {
+	const lastAutoArchiveRunAt = runtimeData?.lastAutoArchiveRunAt;
+
 	if (
-		!Number.isFinite(settings.lastAutoArchiveRunAt) ||
-		settings.lastAutoArchiveRunAt < 0
+		!Number.isFinite(lastAutoArchiveRunAt) ||
+		(lastAutoArchiveRunAt ?? 0) < 0
 	) {
-		changed = true;
-		settings.lastAutoArchiveRunAt =
-			AUTO_ARCHIVE_DEFAULT_SETTINGS.lastAutoArchiveRunAt ?? 0;
+		return { ...AUTO_ARCHIVE_DEFAULT_RUNTIME_DATA };
 	}
 
-	return { settings, changed };
+	return {
+		lastAutoArchiveRunAt: lastAutoArchiveRunAt ?? 0,
+	};
 }

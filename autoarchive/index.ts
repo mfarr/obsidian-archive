@@ -7,7 +7,9 @@
 
 export {
 	AUTO_ARCHIVE_DEFAULT_SETTINGS,
+	AUTO_ARCHIVE_DEFAULT_RUNTIME_DATA,
 	migrateAutoArchiveSettings,
+	normalizeAutoArchiveRuntimeData,
 } from "./AutoArchiveSettings";
 
 export {
@@ -22,6 +24,7 @@ export { AutoArchiveService } from "./AutoArchiveService";
 
 export type {
 	ArchiveResult,
+	AutoArchiveRuntimeData,
 	AutoArchiveCondition,
 	AutoArchiveRule,
 	SimpleArchiverSettings,

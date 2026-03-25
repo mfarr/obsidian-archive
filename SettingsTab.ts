@@ -304,7 +304,8 @@ export class SimpleArchiverSettingsTab extends PluginSettingTab {
 	}
 
 	private getLastAutoArchiveRunText(): string {
-		const lastRunAt = this.plugin.settings.lastAutoArchiveRunAt;
+		const lastRunAt =
+			this.plugin.autoArchiveRuntimeData.lastAutoArchiveRunAt;
 
 		if (!Number.isFinite(lastRunAt) || lastRunAt <= 0) {
 			return "never";

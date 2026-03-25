@@ -18,6 +18,9 @@ export interface SimpleArchiverSettings {
 	autoArchiveRules: AutoArchiveRule[];
 	autoArchiveFrequency: number;
 	autoArchiveStartupDelaySeconds: number;
+}
+
+export interface AutoArchiveRuntimeData {
 	lastAutoArchiveRunAt: number;
 }
 
