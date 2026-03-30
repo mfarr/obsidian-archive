@@ -9,6 +9,8 @@ import {
 	PluginSettingTab,
 	Setting,
 	TAbstractFile,
+	TFile,
+	TFolder,
 } from "obsidian";
 
 interface SimpleArchiverSettings {
@@ -18,6 +20,14 @@ interface SimpleArchiverSettings {
 interface ArchiveResult {
 	success: boolean;
 	message: string;
+}
+
+interface MergeResult {
+	filesAdded: number;
+	filesReplaced: number;
+	filesSkipped: number;
+	foldersCreated: number;
+	failedFiles: string[];
 }
 
 const DEFAULT_SETTINGS: SimpleArchiverSettings = {
@@ -98,7 +108,7 @@ export default class SimpleArchiver extends Plugin {
 							if (result.success) {
 								new Notice(result.message);
 							} else {
-								new Error(result.message);
+								new Notice(result.message);
 							}
 						});
 				});
@@ -137,7 +147,7 @@ export default class SimpleArchiver extends Plugin {
 							if (result.success) {
 								new Notice(result.message);
 							} else {
-								new Error(result.message);
+								new Notice(result.message);
 							}
 						});
 				});
@@ -165,6 +175,10 @@ export default class SimpleArchiver extends Plugin {
 		return file.path.startsWith(this.settings.archiveFolder);
 	}
 
+	private isFolder(file: TAbstractFile): file is TFolder {
+		return file instanceof TFolder;
+	}
+
 	private async archiveFile(file: TAbstractFile): Promise<ArchiveResult> {
 		if (this.isFileArchived(file)) {
 			return { success: false, message: "Item is already archived" };
@@ -178,19 +192,36 @@ export default class SimpleArchiver extends Plugin {
 			this.app.vault.getAbstractFileByPath(destinationFilePath);
 
 		if (existingItem != null) {
-			// Same item exists in archive, prompt to replace
+			const isFolder = this.isFolder(file);
+
 			return new Promise<ArchiveResult>((resolve) => {
 				const prompt = new SimpleArchiverPromptModal(
 					this.app,
-					"Replace archived item?",
-					`An item called "${file.name}" already exists in the destination folder in the archive. Would you like to replace it?`,
-					"Replace",
+					isFolder ? "Merge folders?" : "Replace archived item?",
+					isFolder
+						? `A folder called "${file.name}" already exists in the archive. Merge the contents?`
+						: `An item called "${file.name}" already exists in the destination folder in the archive. Would you like to replace it?`,
+					isFolder ? "Merge" : "Replace",
 					"Cancel",
 					async () => {
-						await this.app.fileManager.trashFile(existingItem);
-						const response = await this.moveFileToArchive(file);
-
-						resolve(response);
+						try {
+							if (isFolder) {
+								const response = await this.mergeFolderIntoArchive(
+									file as TFolder,
+									destinationFilePath
+								);
+								resolve(response);
+							} else {
+								await this.app.fileManager.trashFile(existingItem);
+								const response = await this.moveFileToArchive(file);
+								resolve(response);
+							}
+						} catch (error) {
+							resolve({
+								success: false,
+								message: `Archive operation failed: ${error}`,
+							});
+						}
 					},
 					async () => {
 						resolve({
@@ -249,6 +280,122 @@ export default class SimpleArchiver extends Plugin {
 				success: false,
 				message: `Unable to archive ${file.name}: ${error}`,
 			};
+		}
+	}
+
+	private async mergeFolderIntoArchive(
+		sourceFolder: TFolder,
+		destinationFolderPath: string
+	): Promise<ArchiveResult> {
+		const stats: MergeResult = {
+			filesAdded: 0,
+			filesReplaced: 0,
+			filesSkipped: 0,
+			foldersCreated: 0,
+			failedFiles: [],
+		};
+
+		try {
+			await this.recursiveMerge(sourceFolder, destinationFolderPath, stats);
+
+			// Only delete the source folder if it's empty
+			if (sourceFolder.children.length === 0) {
+				await this.app.vault.delete(sourceFolder);
+			}
+
+			const totalFiles = stats.filesAdded + stats.filesReplaced;
+			let message = `Merged ${sourceFolder.name}: ${totalFiles} file${totalFiles !== 1 ? 's' : ''}`;
+
+			const details: string[] = [];
+			if (stats.filesReplaced > 0) {
+				details.push(`${stats.filesReplaced} replaced`);
+			}
+			if (stats.filesSkipped > 0) {
+				details.push(`${stats.filesSkipped} skipped`);
+			}
+			if (stats.failedFiles.length > 0) {
+				details.push(`${stats.failedFiles.length} failed`);
+			}
+
+			if (details.length > 0) {
+				message += ` (${details.join(', ')})`;
+			}
+
+			if (stats.failedFiles.length > 0) {
+				message += `. Failed: ${stats.failedFiles.join(', ')}`;
+			}
+
+			if (sourceFolder.children.length > 0) {
+				message += `. Source folder not deleted (contains remaining files)`;
+			}
+
+			return {
+				success: stats.failedFiles.length === 0,
+				message: message,
+			};
+		} catch (error) {
+			return {
+				success: false,
+				message: `Unable to merge ${sourceFolder.name}: ${error}`,
+			};
+		}
+	}
+
+	private async recursiveMerge(
+		sourceFolder: TFolder,
+		destinationBasePath: string,
+		stats: MergeResult
+	): Promise<void> {
+		// Create a copy of children array to avoid modification during iteration
+		const children = [...sourceFolder.children];
+
+		for (const child of children) {
+			if (this.isFolder(child)) {
+				const childDestPath = normalizePath(
+					`${destinationBasePath}/${child.name}`
+				);
+
+				const existingFolder = this.app.vault.getFolderByPath(childDestPath);
+				if (existingFolder == null) {
+					await this.app.vault.createFolder(childDestPath);
+					stats.foldersCreated++;
+				}
+
+				await this.recursiveMerge(child, childDestPath, stats);
+			} else {
+				const childDestPath = normalizePath(
+					`${destinationBasePath}/${child.name}`
+				);
+
+				const existingFile = this.app.vault.getAbstractFileByPath(childDestPath);
+
+				try {
+					if (existingFile != null) {
+						// Compare file contents before replacing
+						const sourceContent = await this.app.vault.read(child as TFile);
+						const existingContent = await this.app.vault.read(existingFile as TFile);
+
+						if (sourceContent === existingContent) {
+							// Files are identical - just delete source, keep existing
+							await this.app.vault.delete(child);
+							stats.filesSkipped++;
+						} else {
+							// Files differ - replace existing with source
+							await this.app.fileManager.trashFile(existingFile);
+							await this.app.fileManager.renameFile(child, childDestPath);
+							stats.filesReplaced++;
+						}
+					} else {
+						// No existing file - just move the source
+						await this.app.fileManager.renameFile(child, childDestPath);
+						stats.filesAdded++;
+					}
+				} catch (error) {
+					// Track failed files but continue processing others
+					stats.failedFiles.push(child.name);
+					console.error(`Failed to process ${child.name}:`, error);
+				}
+			}
 		}
 	}
 
