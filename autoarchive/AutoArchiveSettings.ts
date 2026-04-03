@@ -65,6 +65,16 @@ export function migrateAutoArchiveSettings(settings: SimpleArchiverSettings): {
 			AUTO_ARCHIVE_DEFAULT_SETTINGS.autoArchiveStartupDelaySeconds ?? 30;
 	}
 
+	// Normalize auto-archive frequency (minutes)
+	if (
+		!Number.isFinite(settings.autoArchiveFrequency) ||
+		settings.autoArchiveFrequency <= 0
+	) {
+		changed = true;
+		settings.autoArchiveFrequency =
+			AUTO_ARCHIVE_DEFAULT_SETTINGS.autoArchiveFrequency ?? 60;
+	}
+
 	return { settings, changed };
 }
 

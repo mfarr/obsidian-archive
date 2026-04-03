@@ -24,6 +24,8 @@ import { SimpleArchiverSettingsTab } from "../SettingsTab";
 const SETTINGS_TAB_RENDER_DELAY_MS = 200;
 const MAX_FILES_PER_CYCLE = 500;
 const DEFAULT_REGEX_TIMEOUT_MS = 100;
+const MAX_REGEX_PATTERN_LENGTH = 512;
+const MAX_REGEX_VALIDATION_INPUT_LENGTH = 1024;
 
 type MenuEntry = {
 	setTitle(title: string): MenuEntry;
@@ -45,6 +47,7 @@ export class AutoArchiveService {
 	private autoArchiveInterval: number | null = null;
 	private startupAutoArchiveTimeout: number | null = null;
 	private filesProcessedInCycle = 0;
+	private isProcessingAutoArchiveRules = false;
 
 	constructor(
 		app: App,
@@ -96,26 +99,36 @@ export class AutoArchiveService {
 	}
 
 	/**
-	 * Safely compiles and validates a regex pattern to prevent ReDoS attacks.
-	 * Returns null if the pattern is invalid or takes too long to compile.
+	 * Safely compiles and validates a regex pattern.
+	 * This uses conservative static checks and adversarial test input to reduce
+	 * ReDoS risk. It intentionally rejects patterns that look unsafe.
 	 */
 	private validateRegexPattern(pattern: string): RegExp | null {
-		try {
-			// Test the regex with a simple string to ensure it compiles
-			const regex = new RegExp(pattern);
-
-			// Test on a sample string with timeout protection
-			const testString = "test_file_name.md";
-			const timeout = this.withTimeout(
-				() => regex.test(testString),
-				DEFAULT_REGEX_TIMEOUT_MS,
+		if (pattern.length > MAX_REGEX_PATTERN_LENGTH) {
+			console.error(
+				`Regex pattern is too long (${pattern.length} chars): ${pattern}`,
 			);
+			return null;
+		}
 
-			if (timeout === null) {
-				console.error(
-					`Regex pattern took too long to execute: ${pattern}`,
-				);
-				return null;
+		if (this.isLikelyUnsafeRegex(pattern)) {
+			console.error(`Unsafe regex pattern rejected: ${pattern}`);
+			return null;
+		}
+
+		try {
+			const regex = new RegExp(pattern);
+			for (const testInput of this.getRegexValidationInputs()) {
+				const elapsedMs = this.measureRegexTestTime(regex, testInput);
+				if (
+					elapsedMs === null ||
+					elapsedMs > DEFAULT_REGEX_TIMEOUT_MS
+				) {
+					console.error(
+						`Regex pattern failed performance validation on adversarial input: ${pattern}`,
+					);
+					return null;
+				}
 			}
 
 			return regex;
@@ -126,18 +139,44 @@ export class AutoArchiveService {
 	}
 
 	/**
-	 * Executes a function with a timeout, returning null if it exceeds the limit.
-	 * This is a simple approximation; a real implementation would use Web Workers.
+	 * Detects common high-risk regex constructs associated with catastrophic
+	 * backtracking. This is intentionally conservative.
 	 */
-	private withTimeout<T>(fn: () => T, timeoutMs: number): T | null {
-		const start = performance.now();
+	private isLikelyUnsafeRegex(pattern: string): boolean {
+		const hasBackreferences = /(^|[^\\])\\[1-9]/.test(pattern);
+		if (hasBackreferences) {
+			return true;
+		}
+
+		const nestedQuantifierPatterns = [
+			/\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)\s*[+*{]/,
+			/\((?:[^()\\]|\\.)*\{\d+,?\d*\}(?:[^()\\]|\\.)*\)\s*[+*{]/,
+			/\((?:[^()\\]|\\.)*\.[+*](?:[^()\\]|\\.)*\)\s*[+*{]/,
+		];
+
+		return nestedQuantifierPatterns.some((regex) => regex.test(pattern));
+	}
+
+	private getRegexValidationInputs(): string[] {
+		const repeatedA = "a".repeat(MAX_REGEX_VALIDATION_INPUT_LENGTH);
+		const repeatedPathSegment = "segment/".repeat(
+			Math.floor(MAX_REGEX_VALIDATION_INPUT_LENGTH / 8),
+		);
+
+		return [
+			`${repeatedA}!`,
+			`/${repeatedPathSegment}end`,
+			`${repeatedA}.md`,
+			"test_file_name.md",
+		];
+	}
+
+	private measureRegexTestTime(regex: RegExp, input: string): number | null {
 		try {
-			const result = fn();
-			if (performance.now() - start > timeoutMs) {
-				return null;
-			}
-			return result;
-		} catch (error) {
+			const start = performance.now();
+			regex.test(input);
+			return performance.now() - start;
+		} catch {
 			return null;
 		}
 	}
@@ -149,10 +188,11 @@ export class AutoArchiveService {
 
 		const settings = this.getSettings();
 		const intervalMs = settings.autoArchiveFrequency * 60 * 1000;
-		this.autoArchiveInterval = window.setInterval(
-			() => this.processAutoArchiveRules(),
-			intervalMs,
-		);
+		this.autoArchiveInterval = window.setInterval(() => {
+			void this.processAutoArchiveRules().catch((error) => {
+				console.error("Auto-archive cycle failed:", error);
+			});
+		}, intervalMs);
 	}
 
 	stopAutoArchive(): void {
@@ -168,6 +208,15 @@ export class AutoArchiveService {
 	}
 
 	async processAutoArchiveRules(): Promise<void> {
+		if (this.isProcessingAutoArchiveRules) {
+			console.warn(
+				"Auto-archive cycle skipped because a previous cycle is still running.",
+			);
+			return;
+		}
+
+		this.isProcessingAutoArchiveRules = true;
+
 		try {
 			const settings = this.getSettings();
 			const enabledRules = settings.autoArchiveRules.filter(
@@ -243,9 +292,16 @@ export class AutoArchiveService {
 				}
 
 				for (const file of filesToArchive) {
-					const result = await this.archiveFile(file);
-					if (result.success) {
-						totalArchived++;
+					try {
+						const result = await this.archiveFile(file);
+						if (result.success) {
+							totalArchived++;
+						}
+					} catch (error) {
+						console.error(
+							`Auto-archive failed for file: ${file.path}`,
+							error,
+						);
 					}
 				}
 			}
@@ -253,8 +309,11 @@ export class AutoArchiveService {
 			if (totalArchived > 0) {
 				console.log(`Auto-archive: ${totalArchived} files archived`);
 			}
+		} catch (error) {
+			console.error("Auto-archive cycle failed:", error);
 		} finally {
 			await this.persistLastRunTimestamp(Date.now());
+			this.isProcessingAutoArchiveRules = false;
 		}
 	}
 
