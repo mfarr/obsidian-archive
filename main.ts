@@ -1,31 +1,40 @@
 import {
-	App,
 	Editor,
 	MarkdownView,
-	Modal,
 	normalizePath,
 	Notice,
 	Plugin,
-	PluginSettingTab,
-	Setting,
 	TAbstractFile,
 } from "obsidian";
 
-interface SimpleArchiverSettings {
-	archiveFolder: string;
-}
+import {
+	AUTO_ARCHIVE_DEFAULT_SETTINGS,
+	AUTO_ARCHIVE_DEFAULT_RUNTIME_DATA,
+	migrateAutoArchiveSettings,
+	normalizeAutoArchiveRuntimeData,
+	createAutoArchiveService,
+	startAutoArchive,
+	stopAutoArchiveScheduler,
+	setupAutoArchiveContextMenu,
+	AutoArchiveService,
+	type AutoArchiveRuntimeData,
+	type ArchiveResult,
+	type SimpleArchiverSettings,
+} from "./autoarchive";
+import { SimpleArchiverPromptModal } from "./modals";
+import { SimpleArchiverSettingsTab } from "./SettingsTab";
 
-interface ArchiveResult {
-	success: boolean;
-	message: string;
-}
+const AUTO_ARCHIVE_DATA_FILE = "autoarchive_data.json";
 
 const DEFAULT_SETTINGS: SimpleArchiverSettings = {
 	archiveFolder: "Archive",
-};
+	...AUTO_ARCHIVE_DEFAULT_SETTINGS,
+} as SimpleArchiverSettings;
 
 export default class SimpleArchiver extends Plugin {
 	settings: SimpleArchiverSettings;
+	autoArchiveRuntimeData: AutoArchiveRuntimeData;
+	private autoArchiveService: AutoArchiveService;
 
 	async onload() {
 		await this.loadSettings();
@@ -36,7 +45,7 @@ export default class SimpleArchiver extends Plugin {
 			editorCheckCallback: (
 				checking: boolean,
 				editor: Editor,
-				view: MarkdownView
+				view: MarkdownView,
 			) => {
 				const canBeArchived =
 					view.file && !this.isFileArchived(view.file);
@@ -61,7 +70,7 @@ export default class SimpleArchiver extends Plugin {
 			editorCheckCallback: (
 				checking: boolean,
 				editor: Editor,
-				view: MarkdownView
+				view: MarkdownView,
 			) => {
 				const canBeUnarchived =
 					view.file && this.isFileArchived(view.file);
@@ -80,7 +89,37 @@ export default class SimpleArchiver extends Plugin {
 			},
 		});
 
-		this.addSettingTab(new SimpleArchiverSettingsTab(this.app, this));
+		this.autoArchiveService = createAutoArchiveService(
+			this.app,
+			() => ({
+				...this.settings,
+				lastAutoArchiveRunAt:
+					this.autoArchiveRuntimeData.lastAutoArchiveRunAt,
+			}),
+			(file) => this.archiveFile(file),
+			(file) => this.isFileArchived(file),
+			async (lastRunAt) => {
+				await this.saveAutoArchiveRuntimeData({
+					lastAutoArchiveRunAt: lastRunAt,
+				});
+			},
+		);
+		startAutoArchive(this.autoArchiveService);
+
+		this.addSettingTab(
+			new SimpleArchiverSettingsTab(
+				this.app,
+				this,
+				this.autoArchiveService,
+			),
+		);
+
+		// Setup auto-archive context menu
+		setupAutoArchiveContextMenu(
+			this.autoArchiveService,
+			this.app.workspace,
+			this,
+		);
 
 		// Archive file context menu
 		this.registerEvent(
@@ -98,11 +137,12 @@ export default class SimpleArchiver extends Plugin {
 							if (result.success) {
 								new Notice(result.message);
 							} else {
-								new Error(result.message);
+								new Notice(`Error: ${result.message}`);
+								console.error(result.message);
 							}
 						});
 				});
-			})
+			}),
 		);
 
 		this.registerEvent(
@@ -118,7 +158,7 @@ export default class SimpleArchiver extends Plugin {
 							await this.archiveAllFiles(files);
 						});
 				});
-			})
+			}),
 		);
 
 		// Unarchive file context menu
@@ -137,11 +177,12 @@ export default class SimpleArchiver extends Plugin {
 							if (result.success) {
 								new Notice(result.message);
 							} else {
-								new Error(result.message);
+								new Notice(`Error: ${result.message}`);
+								console.error(result.message);
 							}
 						});
 				});
-			})
+			}),
 		);
 
 		this.registerEvent(
@@ -157,12 +198,29 @@ export default class SimpleArchiver extends Plugin {
 							await this.unarchiveAllFiles(files);
 						});
 				});
-			})
+			}),
 		);
 	}
 
 	private isFileArchived(file: TAbstractFile): boolean {
 		return file.path.startsWith(this.settings.archiveFolder);
+	}
+
+	/**
+	 * Safely resolves the original file path from an archived path.
+	 * Handles edge cases like files at vault root or missing parent folders.
+	 */
+	private resolveOriginalPath(archivedPath: string): string | null {
+		const archiveFolderPrefix = this.settings.archiveFolder + "/";
+
+		// Check that the file is actually in the archive folder
+		if (!archivedPath.startsWith(archiveFolderPrefix)) {
+			console.error(`File is not in archive folder: ${archivedPath}`);
+			return null;
+		}
+
+		// Remove the archive folder prefix to get the original path
+		return archivedPath.substring(archiveFolderPrefix.length);
 	}
 
 	private async archiveFile(file: TAbstractFile): Promise<ArchiveResult> {
@@ -171,7 +229,7 @@ export default class SimpleArchiver extends Plugin {
 		}
 
 		const destinationFilePath = normalizePath(
-			`${this.settings.archiveFolder}/${file.path}`
+			`${this.settings.archiveFolder}/${file.path}`,
 		);
 
 		const existingItem =
@@ -197,7 +255,7 @@ export default class SimpleArchiver extends Plugin {
 							success: false,
 							message: "Archive operation cancelled",
 						});
-					}
+					},
 				);
 				prompt.open();
 			});
@@ -221,10 +279,10 @@ export default class SimpleArchiver extends Plugin {
 	}
 
 	private async moveFileToArchive(
-		file: TAbstractFile
+		file: TAbstractFile,
 	): Promise<ArchiveResult> {
 		const destinationPath = normalizePath(
-			`${this.settings.archiveFolder}/${file.parent?.path}`
+			`${this.settings.archiveFolder}/${file.parent?.path}`,
 		);
 
 		const destinationFolder =
@@ -235,7 +293,7 @@ export default class SimpleArchiver extends Plugin {
 		}
 
 		const destinationFilePath = normalizePath(
-			`${destinationPath}/${file.name}`
+			`${destinationPath}/${file.name}`,
 		);
 
 		try {
@@ -245,43 +303,69 @@ export default class SimpleArchiver extends Plugin {
 				message: `${file.name} archived successfully`,
 			};
 		} catch (error) {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
 			return {
 				success: false,
-				message: `Unable to archive ${file.name}: ${error}`,
+				message: `Unable to archive ${file.name}: ${errorMessage}`,
 			};
 		}
 	}
 
 	private async moveFileOutOfArchive(
-		file: TAbstractFile
+		file: TAbstractFile,
 	): Promise<ArchiveResult> {
-		const originalPath = file.path.substring(
-			this.settings.archiveFolder.length + 1
-		);
-		const originalParentPath = originalPath.substring(
-			0,
-			originalPath.lastIndexOf("/")
-		);
+		const originalPath = this.resolveOriginalPath(file.path);
+
+		if (!originalPath) {
+			return {
+				success: false,
+				message: `Unable to unarchive: Invalid archive path ${file.path}`,
+			};
+		}
+
+		// Extract parent folder path by finding the last slash
+		const lastSlashIndex = originalPath.lastIndexOf("/");
+		const originalParentPath =
+			lastSlashIndex > 0
+				? originalPath.substring(0, lastSlashIndex)
+				: null;
 
 		if (originalParentPath) {
 			const originalFolder =
 				this.app.vault.getFolderByPath(originalParentPath);
 
-			if (originalFolder == null) {
-				await this.app.vault.createFolder(normalizePath(originalParentPath));
+			if (!originalFolder) {
+				try {
+					await this.app.vault.createFolder(
+						normalizePath(originalParentPath),
+					);
+				} catch (error) {
+					const errorMessage =
+						error instanceof Error ? error.message : String(error);
+					return {
+						success: false,
+						message: `Unable to create folder: ${errorMessage}`,
+					};
+				}
 			}
 		}
 
 		try {
-			await this.app.fileManager.renameFile(file, normalizePath(originalPath));
+			await this.app.fileManager.renameFile(
+				file,
+				normalizePath(originalPath),
+			);
 			return {
 				success: true,
 				message: `${file.name} unarchived successfully`,
 			};
 		} catch (error) {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
 			return {
 				success: false,
-				message: `Unable to unarchive ${file.name}: ${error}`,
+				message: `Unable to unarchive ${file.name}: ${errorMessage}`,
 			};
 		}
 	}
@@ -291,9 +375,14 @@ export default class SimpleArchiver extends Plugin {
 			return { success: false, message: "Item is not archived" };
 		}
 
-		const originalPath = file.path.substring(
-			this.settings.archiveFolder.length + 1
-		);
+		const originalPath = this.resolveOriginalPath(file.path);
+
+		if (!originalPath) {
+			return {
+				success: false,
+				message: `Unable to unarchive: Invalid archive path`,
+			};
+		}
 
 		const existingItem = this.app.vault.getAbstractFileByPath(originalPath);
 
@@ -316,7 +405,7 @@ export default class SimpleArchiver extends Plugin {
 							success: false,
 							message: "Unarchive operation cancelled",
 						});
-					}
+					},
 				);
 				prompt.open();
 			});
@@ -338,98 +427,104 @@ export default class SimpleArchiver extends Plugin {
 		new Notice(`${unarchived} files unarchived`);
 	}
 
+	onunload() {
+		stopAutoArchiveScheduler(this.autoArchiveService);
+	}
+
 	private async loadSettings() {
-		this.settings = Object.assign(
-			{},
-			DEFAULT_SETTINGS,
-			await this.loadData()
-		);
+		const loadedData = await this.loadData();
+		const lastAutoArchiveRunAt =
+			this.getLegacyLastAutoArchiveRunAt(loadedData);
+
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
+
+		delete (
+			this.settings as Partial<SimpleArchiverSettings> & {
+				lastAutoArchiveRunAt?: number;
+			}
+		).lastAutoArchiveRunAt;
+
+		this.autoArchiveRuntimeData =
+			await this.loadAutoArchiveRuntimeData(lastAutoArchiveRunAt);
+
+		// Migrate auto-archive settings for backward compatibility
+		const { changed } = migrateAutoArchiveSettings(this.settings);
+
+		// Persist the migration if any changes were made
+		if (changed || lastAutoArchiveRunAt !== null) {
+			await this.saveSettings();
+		}
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
-}
 
-class SimpleArchiverPromptModal extends Modal {
-	constructor(
-		app: App,
-		title: string,
-		message: string,
-		yesButtonText: string,
-		noButtonText: string,
-		callback: () => Promise<void>,
-		cancelCallback: () => Promise<void>
-	) {
-		super(app);
-
-		this.setTitle(title);
-
-		this.setContent(message);
-
-		new Setting(this.contentEl)
-			.addButton((btn) =>
-				btn
-					.setButtonText(yesButtonText)
-					.setWarning()
-					.onClick(() => {
-						callback();
-						this.close();
-					})
-			)
-			.addButton((btn) =>
-				btn.setButtonText(noButtonText).onClick(() => {
-					cancelCallback();
-					this.close();
-				})
-			);
-	}
-}
-
-class SimpleArchiverSettingsTab extends PluginSettingTab {
-	plugin: SimpleArchiver;
-
-	constructor(app: App, plugin: SimpleArchiver) {
-		super(app, plugin);
-		this.plugin = plugin;
+	async saveAutoArchiveRuntimeData(runtimeData: AutoArchiveRuntimeData) {
+		this.autoArchiveRuntimeData =
+			normalizeAutoArchiveRuntimeData(runtimeData);
+		await this.app.vault.adapter.write(
+			`${this.manifest.dir}/${AUTO_ARCHIVE_DATA_FILE}`,
+			JSON.stringify(this.autoArchiveRuntimeData, null, 2),
+		);
 	}
 
-	display(): void {
-		const { containerEl } = this;
+	private async loadAutoArchiveRuntimeData(
+		legacyLastAutoArchiveRunAt: number | null,
+	): Promise<AutoArchiveRuntimeData> {
+		const existingRuntimeData = await this.readAutoArchiveRuntimeDataFile();
 
-		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName("Archive folder")
-			.setDesc(
-				"The folder to use as the Archive. If the folder doesn't exist, it will be created when archiving a " +
-					'note. Folder names must not contain "\\", "/" or ":" and must not start with ".".'
-			)
-			.addText((text) =>
-				text
-					.setPlaceholder("Archive folder")
-					.setValue(normalizePath(this.plugin.settings.archiveFolder))
-					.onChange(async (value) => {
-						if (this.setArchiveFolder(value)) {
-							await this.plugin.saveSettings();
-						} else {
-							text.setValue(this.plugin.settings.archiveFolder);
-						}
-					})
-			);
-	}
-
-	private validateArchiveFolderName(value: string): boolean {
-		// Validate folder does not start with '.', contain ':' or contain a relative path
-		return !/^\.|[:/\\]\.|:/.test(value);
-	}
-
-	private setArchiveFolder(value: string): boolean {
-		if (!this.validateArchiveFolderName(value)) {
-			return false;
+		if (existingRuntimeData !== null) {
+			return existingRuntimeData;
 		}
 
-		this.plugin.settings.archiveFolder = value;
-		return true;
+		const migratedRuntimeData = normalizeAutoArchiveRuntimeData({
+			lastAutoArchiveRunAt:
+				legacyLastAutoArchiveRunAt ??
+				AUTO_ARCHIVE_DEFAULT_RUNTIME_DATA.lastAutoArchiveRunAt,
+		});
+
+		if (legacyLastAutoArchiveRunAt !== null) {
+			await this.saveAutoArchiveRuntimeData(migratedRuntimeData);
+		}
+
+		return migratedRuntimeData;
+	}
+
+	private async readAutoArchiveRuntimeDataFile(): Promise<AutoArchiveRuntimeData | null> {
+		const runtimeDataPath = `${this.manifest.dir}/${AUTO_ARCHIVE_DATA_FILE}`;
+
+		if (!(await this.app.vault.adapter.exists(runtimeDataPath))) {
+			return null;
+		}
+
+		try {
+			const content = await this.app.vault.adapter.read(runtimeDataPath);
+			const parsedData = JSON.parse(
+				content,
+			) as Partial<AutoArchiveRuntimeData>;
+			return normalizeAutoArchiveRuntimeData(parsedData);
+		} catch (error) {
+			console.error("Failed to load auto-archive runtime data:", error);
+			return { ...AUTO_ARCHIVE_DEFAULT_RUNTIME_DATA };
+		}
+	}
+
+	private getLegacyLastAutoArchiveRunAt(loadedData: unknown): number | null {
+		if (
+			loadedData === null ||
+			typeof loadedData !== "object" ||
+			!("lastAutoArchiveRunAt" in loadedData)
+		) {
+			return null;
+		}
+
+		const { lastAutoArchiveRunAt } = loadedData as {
+			lastAutoArchiveRunAt?: unknown;
+		};
+
+		return typeof lastAutoArchiveRunAt === "number"
+			? lastAutoArchiveRunAt
+			: null;
 	}
 }
