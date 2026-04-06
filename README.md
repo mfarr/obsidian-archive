@@ -62,8 +62,13 @@ AI-assisted contributions will be considered with discretion. Obviously vibe-cod
 
 - [nicholaslck](https://github.com/nicholaslck)
 - [ggfevans](https://github.com/ggfevans)
+- [albertsj1](https://github.com/albertsj1)
 
 ## Release Notes
+
+### v0.6.0
+
+- **New**: Add auto-archiving functionality. Thanks to [albertsj1](https://github.com/albertsj1)!
 
 ### v0.5.2
 
