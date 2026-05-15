@@ -306,9 +306,6 @@ export class AutoArchiveService {
 				}
 			}
 
-			if (totalArchived > 0) {
-				console.log(`Auto-archive: ${totalArchived} files archived`);
-			}
 		} catch (error) {
 			console.error("Auto-archive cycle failed:", error);
 		} finally {

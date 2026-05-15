@@ -246,13 +246,13 @@ export class SimpleArchiverSettingsTab extends PluginSettingTab {
 			cls: "auto-archive-rule-conditions",
 		});
 		if (rule.conditions.length === 0) {
-			conditionsEl.createEl("span", {
+			conditionsEl.createSpan({
 				text: "No conditions set",
 				cls: "setting-item-description",
 			});
 		} else {
 			if (rule.conditions.length > 1) {
-				conditionsEl.createEl("div", {
+				conditionsEl.createDiv({
 					text: `Logic: ${rule.logicOperator || "AND"}`,
 					cls: "auto-archive-rule-logic",
 				});
@@ -260,7 +260,7 @@ export class SimpleArchiverSettingsTab extends PluginSettingTab {
 			for (const condition of rule.conditions) {
 				const conditionText =
 					this.autoArchiveService.getConditionText(condition);
-				conditionsEl.createEl("div", {
+				conditionsEl.createDiv({
 					text: `• ${conditionText}`,
 					cls: "auto-archive-rule-condition",
 				});
