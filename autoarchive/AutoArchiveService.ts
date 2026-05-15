@@ -227,7 +227,6 @@ export class AutoArchiveService {
 				return;
 			}
 
-			let totalArchived = 0;
 			this.filesProcessedInCycle = 0;
 
 			for (const rule of enabledRules) {
@@ -293,10 +292,7 @@ export class AutoArchiveService {
 
 				for (const file of filesToArchive) {
 					try {
-						const result = await this.archiveFile(file);
-						if (result.success) {
-							totalArchived++;
-						}
+						await this.archiveFile(file);
 					} catch (error) {
 						console.error(
 							`Auto-archive failed for file: ${file.path}`,
