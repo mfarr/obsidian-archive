@@ -44,7 +44,7 @@ export default class SimpleArchiver extends Plugin {
 			name: "Move to archive",
 			editorCheckCallback: (
 				checking: boolean,
-				editor: Editor,
+				_editor: Editor,
 				view: MarkdownView,
 			) => {
 				const canBeArchived =
@@ -52,9 +52,16 @@ export default class SimpleArchiver extends Plugin {
 
 				if (canBeArchived && view.file != null) {
 					if (!checking) {
-						this.archiveFile(view.file).then((result) => {
-							new Notice(result.message);
-						});
+						void this.archiveFile(view.file)
+							.then((result) => {
+								new Notice(result.message);
+							})
+							.catch((e: unknown) => {
+								const msg =
+									e instanceof Error ? e.message : String(e);
+								new Notice(`Error: ${msg}`);
+								console.error(msg);
+							});
 					}
 
 					return true;
@@ -69,7 +76,7 @@ export default class SimpleArchiver extends Plugin {
 			name: "Move out of archive",
 			editorCheckCallback: (
 				checking: boolean,
-				editor: Editor,
+				_editor: Editor,
 				view: MarkdownView,
 			) => {
 				const canBeUnarchived =
@@ -77,9 +84,16 @@ export default class SimpleArchiver extends Plugin {
 
 				if (canBeUnarchived && view.file != null) {
 					if (!checking) {
-						this.unarchiveFile(view.file).then((result) => {
-							new Notice(result.message);
-						});
+						void this.unarchiveFile(view.file)
+							.then((result) => {
+								new Notice(result.message);
+							})
+							.catch((e: unknown) => {
+								const msg =
+									e instanceof Error ? e.message : String(e);
+								new Notice(`Error: ${msg}`);
+								console.error(msg);
+							});
 					}
 
 					return true;

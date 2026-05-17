@@ -88,3 +88,14 @@ If your plugin does not need CSS, delete this file.
 	border-radius: 4px;
 	background-color: var(--background-primary);
 }
+
+.auto-archive-rule-validation-error {
+	display: none;
+	color: var(--text-error);
+	font-weight: 600;
+	margin-bottom: 12px;
+}
+
+.auto-archive-rule-validation-error.is-visible {
+	display: block;
+}

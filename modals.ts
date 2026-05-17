@@ -28,13 +28,13 @@ export class SimpleArchiverPromptModal extends Modal {
 					.setButtonText(yesButtonText)
 					.setWarning()
 					.onClick(() => {
-						callback();
+						void callback();
 						this.close();
 					}),
 			)
 			.addButton((btn) =>
 				btn.setButtonText(noButtonText).onClick(() => {
-					cancelCallback();
+					void cancelCallback();
 					this.close();
 				}),
 			);
@@ -75,10 +75,6 @@ export class AutoArchiveRuleModal extends Modal {
 		this.validationErrorEl = contentEl.createDiv({
 			cls: "auto-archive-rule-validation-error",
 		});
-		this.validationErrorEl.style.display = "none";
-		this.validationErrorEl.style.color = "var(--text-error)";
-		this.validationErrorEl.style.fontWeight = "600";
-		this.validationErrorEl.style.marginBottom = "12px";
 
 		new Setting(contentEl)
 			.setName("Folder path")
@@ -324,12 +320,12 @@ export class AutoArchiveRuleModal extends Modal {
 
 	private showValidationError(message: string): void {
 		this.validationErrorEl.setText(message);
-		this.validationErrorEl.style.display = "block";
+		this.validationErrorEl.addClass("is-visible");
 	}
 
 	private clearValidationError(): void {
 		this.validationErrorEl.empty();
-		this.validationErrorEl.style.display = "none";
+		this.validationErrorEl.removeClass("is-visible");
 	}
 
 	private normalizeRulePath(path: string): string {
