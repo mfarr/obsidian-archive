@@ -66,6 +66,10 @@ AI-assisted contributions will be considered with discretion. Obviously vibe-cod
 
 ## Release Notes
 
+### v0.6.2
+
+- **Fix**: Address issues identified on Obsidian community plugin
+
 ### v0.6.1
 
 - **New**: Add auto-archiving functionality. Thanks to [albertsj1](https://github.com/albertsj1)!
